@@ -598,8 +598,10 @@ describe Whatsapp::SendOnWhatsappService do
         channel_a = message_a.conversation.inbox.channel
         channel_b = message_b.conversation.inbox.channel
 
-        expect(channel_a).to receive(:send_message).with('AE.QACUSTOMERA', message_a).and_return('provider-id-a')
-        expect(channel_b).to receive(:send_message).with('AE.QACUSTOMERB', message_b).and_return('provider-id-b')
+        expect(channel_a).to receive(:send_message)
+          .with('AE.QACUSTOMERA', message_a, outgoing_content: message_a.outgoing_content).and_return('provider-id-a')
+        expect(channel_b).to receive(:send_message)
+          .with('AE.QACUSTOMERB', message_b, outgoing_content: message_b.outgoing_content).and_return('provider-id-b')
 
         described_class.new(message: message_a).perform
         described_class.new(message: message_b).perform

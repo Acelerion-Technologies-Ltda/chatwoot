@@ -86,6 +86,7 @@ const setNewConversationPayload = ({
 
 const state = {
   records: {},
+  neighbours: {},
   uiFlags: {
     isFetching: false,
   },
@@ -96,16 +97,21 @@ export const getters = {
     return $state.uiFlags;
   },
   getContactConversation: $state => id => {
-    return $state.records[Number(id)] || [];
+    const records = $state.records[Number(id)] || [];
+    return [...records].sort(
+      (a, b) => b.created_at - a.created_at || b.id - a.id
+    );
   },
   getAllConversationsByContactId: $state => id => {
     const records = $state.records[Number(id)] || [];
     return camelcaseKeys(records, { deep: true });
   },
+  getConversationNeighbours: $state => conversationId =>
+    $state.neighbours[Number(conversationId)] || [],
 };
 
 export const actions = {
-  create: async ({ commit }, { params, isFromWhatsApp }) => {
+  create: async ({ commit, state: $state }, { params, isFromWhatsApp }) => {
     commit(types.default.SET_CONTACT_CONVERSATIONS_UI_FLAG, {
       isCreating: true,
     });
@@ -119,10 +125,13 @@ export const actions = {
       });
 
       const { data } = await ConversationApi.create(payload);
-      commit(types.default.ADD_CONTACT_CONVERSATION, {
-        id: contactId,
-        data,
-      });
+      // Only the full fetch may seed a contact's cache; extend it when it exists.
+      if ($state.records[contactId]) {
+        commit(types.default.ADD_CONTACT_CONVERSATION, {
+          id: contactId,
+          data,
+        });
+      }
 
       return data;
     } catch (error) {
@@ -159,6 +168,19 @@ export const actions = {
     });
     const conversation = response.data.payload?.[0];
     return conversation ? camelcaseKeys(conversation, { deep: true }) : null;
+  },
+  getNeighbours: async ({ commit }, { contactId, conversationId }) => {
+    try {
+      const { data } = await ContactAPI.getConversations(contactId, {
+        conversationId,
+      });
+      commit(types.default.SET_CONVERSATION_NEIGHBOURS, {
+        id: conversationId,
+        data: data.payload,
+      });
+    } catch (error) {
+      // The links stay hidden when the neighbours cannot be resolved.
+    }
   },
 };
 
@@ -197,6 +219,12 @@ export const mutations = {
   [types.default.DELETE_CONTACT_CONVERSATION]: ($state, id) => {
     const { [id]: deletedRecord, ...remainingRecords } = $state.records;
     $state.records = remainingRecords;
+  },
+  [types.default.SET_CONVERSATION_NEIGHBOURS]: ($state, { id, data }) => {
+    $state.neighbours = {
+      ...$state.neighbours,
+      [id]: data,
+    };
   },
 };
 

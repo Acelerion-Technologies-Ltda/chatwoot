@@ -114,10 +114,10 @@ const SORT_OPTIONS = {
   created_at_desc: ['sortOnCreatedAt', 'desc'],
   priority_asc: ['sortOnPriority', 'asc'],
   priority_desc: ['sortOnPriority', 'desc'],
-  unread: ['sortOnUnread', 'desc'],
   waiting_since_asc: ['sortOnWaitingSince', 'asc'],
   waiting_since_desc: ['sortOnWaitingSince', 'desc'],
   priority_desc_created_at_asc: ['sortOnPriorityCreatedAt', 'desc'],
+  unread: ['sortOnUnread', 'desc'],
 };
 const sortAscending = (valueA, valueB) => valueA - valueB;
 const sortDescending = (valueA, valueB) => valueB - valueA;
@@ -130,15 +130,18 @@ const sortConfig = {
     getSortOrderFunction(sortDirection)(a.last_activity_at, b.last_activity_at),
 
   sortOnCreatedAt: (a, b, sortDirection) =>
-    getSortOrderFunction(sortDirection)(a.created_at, b.created_at),
+    getSortOrderFunction(sortDirection)(a.created_at, b.created_at) ||
+    getSortOrderFunction(sortDirection)(a.id, b.id),
 
   sortOnPriority: (a, b, sortDirection) => {
     const DEFAULT_FOR_NULL = sortDirection === 'asc' ? 5 : 0;
 
     const p1 = CONVERSATION_PRIORITY_ORDER[a.priority] || DEFAULT_FOR_NULL;
     const p2 = CONVERSATION_PRIORITY_ORDER[b.priority] || DEFAULT_FOR_NULL;
+    const priorityDiff = getSortOrderFunction(sortDirection)(p1, p2);
+    if (priorityDiff !== 0) return priorityDiff;
 
-    return getSortOrderFunction(sortDirection)(p1, p2);
+    return sortDescending(a.last_activity_at, b.last_activity_at);
   },
 
   sortOnPriorityCreatedAt: (a, b) => {
@@ -149,23 +152,23 @@ const sortConfig = {
     return a.created_at - b.created_at;
   },
 
+  sortOnWaitingSince: (a, b, sortDirection) => {
+    const sortFunc = getSortOrderFunction(sortDirection);
+    if (!a.waiting_since || !b.waiting_since) {
+      if (!a.waiting_since && !b.waiting_since) {
+        return sortAscending(a.created_at, b.created_at);
+      }
+      return a.waiting_since ? -1 : 1;
+    }
+
+    return sortFunc(a.waiting_since, b.waiting_since);
+  },
+
   sortOnUnread: (a, b) => {
     const unreadCountDiff = (b.unread_count || 0) - (a.unread_count || 0);
     if (unreadCountDiff !== 0) return unreadCountDiff;
 
     return (b.last_activity_at || 0) - (a.last_activity_at || 0);
-  },
-
-  sortOnWaitingSince: (a, b, sortDirection) => {
-    const sortFunc = getSortOrderFunction(sortDirection);
-    if (!a.waiting_since || !b.waiting_since) {
-      if (!a.waiting_since && !b.waiting_since) {
-        return sortFunc(a.created_at, b.created_at);
-      }
-      return sortFunc(a.waiting_since ? 0 : 1, b.waiting_since ? 0 : 1);
-    }
-
-    return sortFunc(a.waiting_since, b.waiting_since);
   },
 };
 

@@ -34,7 +34,7 @@ describe AgentBotListener do
 
       it 'sends message to the inbox bot without assigning the conversation to it' do
         create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
-        conversation.update!(assignee: nil, assignee_agent_bot: nil)
+        conversation.update!(assignee: nil, ai_assignee: nil)
 
         expect(AgentBots::WebhookJob).to receive(:perform_later).with(
           agent_bot.outgoing_url, message.webhook_data.merge(event: 'message_created'),
@@ -42,7 +42,7 @@ describe AgentBotListener do
         ).once
 
         listener.message_created(event)
-        expect(conversation.reload.assignee_agent_bot).to be_nil
+        expect(conversation.reload.ai_assignee).to be_nil
       end
 
       it 'does not send message to agent bot if url is empty' do
@@ -57,7 +57,7 @@ describe AgentBotListener do
 
         before do
           create(:agent_bot_inbox, inbox: inbox, agent_bot: agent_bot)
-          conversation.update!(assignee_agent_bot: conversation_bot, assignee: nil)
+          conversation.update!(ai_assignee: conversation_bot, assignee: nil)
         end
 
         it 'sends message to both bots exactly once' do
@@ -147,7 +147,7 @@ describe AgentBotListener do
 
     context 'when conversation is assigned to an agent bot' do
       before do
-        conversation.update!(assignee_agent_bot: agent_bot, assignee: nil)
+        conversation.update!(ai_assignee: agent_bot, assignee: nil)
       end
 
       it 'sends webhook to the assigned agent bot' do
@@ -195,7 +195,7 @@ describe AgentBotListener do
       end
 
       before do
-        conversation.update!(assignee_agent_bot: agent_bot, assignee: nil)
+        conversation.update!(ai_assignee: agent_bot, assignee: nil)
       end
 
       it 'sends webhook with changed_attributes to the assigned agent bot' do

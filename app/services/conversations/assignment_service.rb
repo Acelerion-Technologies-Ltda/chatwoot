@@ -18,12 +18,12 @@ class Conversations::AssignmentService
     return unless assignee
 
     conversation.with_lock do
-      if conversation.assignee_agent_bot_id.present? && conversation.pending?
+      if open_on_assignment? && conversation.pending?
         conversation.status = :open
         conversation.waiting_since = Time.current if conversation.waiting_since.blank?
       end
       conversation.assignee = assignee
-      conversation.assignee_agent_bot = nil
+      conversation.ai_assignee = nil
       conversation.save!
     end
     assignee
@@ -31,19 +31,27 @@ class Conversations::AssignmentService
 
   def clear_assignee
     conversation.assignee = nil
-    conversation.assignee_agent_bot = nil
+    conversation.ai_assignee = nil
     conversation.save!
   end
 
   def assign_agent_bot
-    return unless agent_bot
+    assign_ai_assignee(agent_bot)
+  end
+
+  def open_on_assignment?
+    assignee.present? && conversation.ai_assignee_type.present?
+  end
+
+  def assign_ai_assignee(ai_assignee)
+    return unless ai_assignee
 
     conversation.with_lock do
       conversation.assignee = nil
-      conversation.assignee_agent_bot = agent_bot
+      conversation.ai_assignee = ai_assignee
       conversation.save!
     end
-    agent_bot
+    ai_assignee
   end
 
   def assignee
@@ -58,3 +66,5 @@ class Conversations::AssignmentService
     assignee_type.to_s == 'AgentBot'
   end
 end
+
+Conversations::AssignmentService.prepend_mod_with('Conversations::AssignmentService')

@@ -20,10 +20,14 @@ class Messages::StatusUpdateService
   private
 
   def update_message_status
-    message.update!(
+    attributes = {
       status: status,
       external_error: resolved_external_error
-    )
+    }
+    if message.inbox.api? && message.additional_attributes.key?('api_retry')
+      attributes[:additional_attributes] = message.additional_attributes.except('api_retry')
+    end
+    message.update!(attributes)
   end
 
   def resolved_external_error

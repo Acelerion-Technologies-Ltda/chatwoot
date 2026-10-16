@@ -54,6 +54,11 @@ class Api::V1::Accounts::Conversations::MessagesController < Api::V1::Accounts::
   def retry
     return if message.blank?
 
+    if @conversation.inbox.api?
+      Messages::ApiRetryService.new(message).perform
+      return
+    end
+
     ::SendReplyJob.perform_later(message.id) if claim_message_retry
   rescue StandardError => e
     render_could_not_create_error(e.message)

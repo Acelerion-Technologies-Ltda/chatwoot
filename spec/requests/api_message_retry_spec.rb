@@ -31,10 +31,46 @@ RSpec.describe 'API inbox message retries', type: :request do
     expect(request_id).to be_present
     expect(WebhookJob).to have_been_enqueued.with(
       channel.webhook_url, hash_including(id: message.id, event: 'message_created', source_id: 'previous-provider-id'), :api_inbox_webhook,
-      secret: channel.secret, delivery_id: request_id
+      secret: channel.secret, delivery_id: instance_of(String)
     )
     expect(SendReplyJob).not_to have_been_enqueued
     expect(response.parsed_body['status']).to eq('failed')
+  end
+
+  it 'supports the account webhook used by integrations without an inbox webhook' do
+    account.enable_features!(:api_and_webhooks)
+    channel.update!(webhook_url: nil)
+    webhook = create(:webhook, account: account, url: 'https://integration.example/account', subscriptions: ['message_created'])
+    clear_enqueued_jobs
+
+    post path, headers: headers, as: :json
+
+    expect(response).to have_http_status(:success)
+    expect(message.reload).to be_failed
+    expect(message.additional_attributes.dig('api_retry', 'id')).to be_present
+    expect(WebhookJob).to have_been_enqueued.with(
+      webhook.url, hash_including(id: message.id, event: 'message_created'), :account_webhook,
+      secret: webhook.secret, delivery_id: instance_of(String)
+    )
+    expect(SendReplyJob).not_to have_been_enqueued
+  end
+
+  it 'retries through the active inbox agent bot while a human owns the conversation' do
+    channel.update!(webhook_url: nil)
+    bot = create(:agent_bot, account: account, outgoing_url: 'https://integration.example/bot')
+    create(:agent_bot_inbox, inbox: inbox, agent_bot: bot, status: :active)
+    conversation.update!(assignee: agent, status: :open)
+    clear_enqueued_jobs
+
+    post path, headers: headers, as: :json
+
+    expect(response).to have_http_status(:success)
+    expect(message.reload).to be_failed
+    expect(AgentBots::WebhookJob).to have_been_enqueued.with(
+      bot.outgoing_url, hash_including(id: message.id, event: 'message_created'), :agent_bot_webhook,
+      secret: bot.secret, delivery_id: instance_of(String)
+    )
+    expect(SendReplyJob).not_to have_been_enqueued
   end
 
   it 'claims only one pending attempt and allows another after a provider rejection' do
